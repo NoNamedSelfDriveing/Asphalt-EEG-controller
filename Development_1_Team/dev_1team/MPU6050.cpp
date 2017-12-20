@@ -1,28 +1,10 @@
-#include <Wire.h>
-
-#define ACCEL_XOUT_H 0x3B
-#define ROLL 0
-#define PITCH 1
-#define YAW 2
-
-typedef union _mpu6050{
-  uint8_t buff[4];
-  float value;  
-}MPU6050;
-
-typedef struct _kalman{
-  double P[2][2];
-  double K[2];
-  double angle;
-  double bias;
-  double Q_angle;
-  double Q_gyro;
-  double R_measure;
-}KALMAN;
+#include "Wire.h"
+#include "MPU6050.h"
 
 MPU6050 mpu[3];
 KALMAN kalman[3];
 
+uint8_t mpu_packet_buff[PACKET_SIZE];
 const int MPU_addr = 0x68;
 int16_t acX, acY, acZ, tmp, gyX, gyY, gyZ;
 uint32_t past_time;
@@ -86,12 +68,6 @@ void init_mpu()
   Serial.begin(9600);
 }
 
-void setup() {
-  // put your setup code here, to run once:
-  init_kalman(0.1, 0.003, 0.03);
-  init_mpu();
-}
-
 void read_MPU(uint8_t start_addr)
 {
   Wire.beginTransmission(MPU_addr);
@@ -107,9 +83,32 @@ void read_MPU(uint8_t start_addr)
   gyZ = (Wire.read() << 8) | (Wire.read());
 }
 
+void make_mpu_packet()
+{
+  mpu_packet_buff[0] = START_BYTE;
+  mpu_packet_buff[PACKET_SIZE - 1] = END_BYTE;
 
-void loop() {
-  // put your main code here, to run repeatedly:
+  /* ROLL data */
+  mpu_packet_buff[1] = mpu[0].buff[3];
+  mpu_packet_buff[2] = mpu[0].buff[2];
+  mpu_packet_buff[3] = mpu[0].buff[1];
+  mpu_packet_buff[4] = mpu[0].buff[0];
+
+  /* PITCH data */
+  mpu_packet_buff[5] = mpu[1].buff[3];
+  mpu_packet_buff[6] = mpu[1].buff[2];
+  mpu_packet_buff[7] = mpu[1].buff[1];
+  mpu_packet_buff[8] = mpu[1].buff[0];
+
+  /* YAW data */
+  mpu_packet_buff[9] = mpu[2].buff[3];
+  mpu_packet_buff[10] = mpu[2].buff[2];
+  mpu_packet_buff[11] = mpu[2].buff[1];
+  mpu_packet_buff[12] = mpu[2].buff[0];
+}
+
+void get_mpu_value()
+{
   read_MPU(ACCEL_XOUT_H);
   float FS_SEL = 16.4;
   float gyro_x = gyX/FS_SEL;
@@ -131,14 +130,9 @@ void loop() {
   mpu[ROLL].value = get_kalman(ROLL, accel_angle_x, gyro_x, delta_T);
   mpu[PITCH].value = get_kalman(PITCH, accel_angle_y, gyro_y, delta_T);
   mpu[YAW].value = get_kalman(YAW, accel_angle_z, gyro_z, delta_T);
-  
-  Serial.print("kalman degree ");
-  Serial.print("ROLL : ");
-  Serial.print(mpu[ROLL].value);
-  Serial.print(" | PITCH : ");
-  Serial.print(mpu[PITCH].value);
-  Serial.print(" | YAW : ");
-  Serial.println(mpu[YAW].value);
+
+  //Serial.println(mpu[ROLL].value);
 }
+
 
 
